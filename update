@@ -1,0 +1,11 @@
+#!/usr/bin/env zsh
+function update() {
+  2>/dev/null 1>&2 which python3 || brew install python3
+  echo -e "\e[43mUpdate location and eddb.io\e[0m";
+  python3 edce_client.py;
+  echo -e "\e[43mDisplaying player assets\e[0m";
+  python3 player_dump.py;
+  echo -e "\e[43mSleeping for 2 minutes\e[0m";
+}
+update
+while sleep 121; do update; done
