@@ -15,6 +15,7 @@ import edce.globals
 import edce.error
 
 testSchema = False
+schemaVersion = 2
 
 def convertCategoryEDDN(name):
     commoditiesCategory                 = {}
@@ -57,7 +58,7 @@ def submitEDDN(data):
     if r.status_code == requests.codes.ok:
         return r.text
     else:
-        errstr = "Error: EDDN submitEDDN FAIL %s" % r.status_code
+        errstr = "Status Code %s error: %s" % (r.status_code, r.text)
         raise edce.error.ErrorEDDN(errstr)    
 
 def getBracket(level):
@@ -75,75 +76,129 @@ def postMarketData(data):
 
     enable = edce.config.getString('preferences','enable_eddn')
     if enable.lower() != 'yes':
-        errstr = "Error: EDDN postMarketData FAIL, EDDN is disabled in edce.ini"
+        errstr = "EDDN is disabled in edce.ini"
         raise edce.error.ErrorEDDN(errstr)        
         
     username=edce.config.getString('login','username')
     if username == '':
-        errstr = "Error: EDDN postMarketData FAIL no username"
+        errstr = "No username"
         raise edce.error.ErrorEDDN(errstr)
     
     if "docked" in data.commander and data.commander.docked:
         pass
     else:
-        errstr = "Error: EDDN postMarketData FAIL pilot must be docked"
+        errstr = "Pilot must be docked"
         raise edce.error.ErrorEDDN(errstr)
     
     # Issue 12: No market
     if "commodities" not in data.lastStarport:
-        errstr = "Error: EDDN postMarketData FAIL station must have a market"
+        errstr = "Station must have a market"
         raise edce.error.ErrorEDDN(errstr)
     
     try:
         utf8username = edce.util.convertUTF8(username)
         clientID = hashlib.sha224(utf8username.encode('utf-8')).hexdigest()
-        
-        schema = 'http://schemas.elite-markets.net/eddn/commodity/2'
-        if testSchema:
-            schema = schema + '/test'
-        
-        message                                 = {}
-        message['$schemaRef']                   = schema
-        
-        message['header']                       = {}
-        message['header']['softwareVersion']    = edce.globals.version.strip()
-        message['header']['softwareName']       = edce.globals.name.strip()
-        message['header']['uploaderID']         = clientID
-        
-        message['message']                      = {}
-        message['message']['timestamp']         = datetime.datetime.utcnow().isoformat()
-        message['message']['systemName']        = data.lastSystem.name.strip()
-        message['message']['stationName']       = data.lastStarport.name.strip()
-        
-        message['message']['commodities']       = []
-             
-        for commodity in data.lastStarport.commodities:
-            tmpCommodity = {}
-        
-            if "categoryname" in commodity and commodity.categoryname != "NonMarketable":
-                tmpCommodity["name"]        = convertCommodityEDDN(commodity.name.strip()).strip()
-                
-                tmpCommodity["buyPrice"]    = math.floor(commodity.buyPrice)
-                tmpCommodity["supply"]      = commodity.stockBracket and math.floor(commodity.stock)
-                
-                tmpCommodity["sellPrice"]   = math.floor(commodity.sellPrice)
-                tmpCommodity["demand"]      = commodity.demandBracket and math.floor(commodity.demand)
-                
-                if commodity.stockBracket > 0:
-                    tmpCommodity['supplyLevel'] = getBracket(commodity.stockBracket)
-                if commodity.demandBracket > 0:
-                    tmpCommodity['demandLevel'] = getBracket(commodity.demandBracket)
-                    
-                message['message']['commodities'].append(tmpCommodity)
-                    
-            else:
-                if edce.globals.debug:
-                    print(">>>>>>>>>>>>>>>> postMarketData skipped " + commodity.name)
-                    
-            del tmpCommodity
+       
+        if schemaVersion == 2:
+            schema = 'http://schemas.elite-markets.net/eddn/commodity/2'
+            if testSchema:
+                schema = schema + '/test'
             
+            if edce.globals.debug:
+                print("Using schema " + schema)            
+            
+            message                                 = {}
+            message['$schemaRef']                   = schema
+            
+            message['header']                       = {}
+            message['header']['softwareVersion']    = edce.globals.version.strip()
+            message['header']['softwareName']       = edce.globals.name.strip()
+            message['header']['uploaderID']         = clientID
+            
+            message['message']                      = {}
+            message['message']['timestamp']         = datetime.datetime.utcnow().isoformat()
+            message['message']['systemName']        = data.lastSystem.name.strip()
+            message['message']['stationName']       = data.lastStarport.name.strip()
+            
+            message['message']['commodities']       = []
+                 
+            for commodity in data.lastStarport.commodities:
+                tmpCommodity = {}
+            
+                if "categoryname" in commodity and commodity.categoryname != "NonMarketable" and commodity.stockBracket != '' and commodity.demandBracket != '':
+                    tmpCommodity["name"]        = convertCommodityEDDN(commodity.name.strip()).strip()
+                    
+                    tmpCommodity["buyPrice"]    = math.floor(commodity.buyPrice)
+                    tmpCommodity["sellPrice"]   = math.floor(commodity.sellPrice)
+                                
+                    tmpCommodity["supply"]      = commodity.stockBracket and math.floor(commodity.stock)
+                    if commodity.stockBracket > 0:
+                        tmpCommodity['supplyLevel'] = getBracket(commodity.stockBracket)
+                            
+                    tmpCommodity["demand"]      = commodity.demandBracket and math.floor(commodity.demand)
+                    if commodity.demandBracket > 0:
+                        tmpCommodity['demandLevel'] = getBracket(commodity.demandBracket)
+                        
+                    message['message']['commodities'].append(tmpCommodity)
+                        
+                else:
+                    if edce.globals.debug:
+                        print(">>>>>>>>>>>>>>>> postMarketData skipped " + commodity.name)
+                        
+                del tmpCommodity
+
+        elif schemaVersion == 3:
+            schema = 'http://schemas.elite-markets.net/eddn/commodity/3'
+            if testSchema:
+                schema = schema + '/test'
+            
+            if edce.globals.debug:
+                print("Using schema " + schema)            
+            
+            message                                 = {}
+            message['$schemaRef']                   = schema
+            
+            message['header']                       = {}
+            message['header']['softwareVersion']    = edce.globals.version.strip()
+            message['header']['softwareName']       = edce.globals.name.strip()
+            message['header']['uploaderID']         = clientID
+            
+            message['message']                      = {}
+            message['message']['timestamp']         = datetime.datetime.utcnow().isoformat()
+            message['message']['systemName']        = data.lastSystem.name.strip()
+            message['message']['stationName']       = data.lastStarport.name.strip()
+            
+            message['message']['commodities']       = []
+                 
+            for commodity in data.lastStarport.commodities:           
+                tmpCommodity = {}
+                
+                if "categoryname" in commodity and commodity.categoryname != "NonMarketable" and commodity.stockBracket != '' and commodity.demandBracket != '':
+                    tmpCommodity["name"] = commodity.name
+                    tmpCommodity["meanPrice"] = int(commodity.meanPrice)
+                    tmpCommodity["buyPrice"] = int(commodity.buyPrice)
+                    tmpCommodity["stock"] = int(commodity.stock)
+                    tmpCommodity["stockBracket"] = commodity.stockBracket
+                    tmpCommodity["sellPrice"] = int(commodity.sellPrice)
+                    tmpCommodity["demand"] = int(commodity.demand)
+                    tmpCommodity["demandBracket"] = commodity.demandBracket
+                    
+                    if len(commodity.statusFlags) > 0:
+                        tmpCommodity["statusFlags"] = commodity.statusFlags                
+                
+                    message['message']['commodities'].append(tmpCommodity)
+                else:
+                    if edce.globals.debug:
+                        print(">>>>>>>>>>>>>>>> postMarketData skipped " + commodity.name)
+
+                del tmpCommodity
+                
+        else:
+            errstr = "Invalid schema version"
+            raise edce.error.ErrorEDDN(errstr)
+
         submitEDDN(message)
      
-    except:
-        errstr = "Error: EDDN postMarketData FAIL submit error"
+    except Exception as error:
+        errstr = "Error: EDDN postMarketData FAIL submit error: %s " % error
         raise edce.error.ErrorEDDN(errstr)
